@@ -1,135 +1,194 @@
 import time
-import numpy as np
-from simulator.stock_simulator import brownian_motion
-from simulator.config import UPDATE_INTERVAL
+from simulator.config import COMPANIES, UPDATE_INTERVAL, MAX_STORAGE_TIME, ONE_DAY_SECONDS, UPDATE_PERIODS, CANDLE_PER_DAY, PERIOD_RANGE
+from simulator.stock_simulator import brownian_motion 
+from collections import deque
 
-def generate_data(shared_stock_data, companies, initial_prices):
-    """실시간 주가 생성"""
+def generate_data(market_data):   
     while True:
         time.sleep(UPDATE_INTERVAL)
-        for comp in companies:
-            # 데이터가 없으면 초기 가격으로 시작
-            if len(shared_stock_data[comp]) == 0:
-                print(f"⚠️ {comp}의 초기 데이터가 없어 초기화합니다.")
-                shared_stock_data[comp].append({"time": time.time(), "price": initial_prices[comp]})
-                continue
+        for comp in COMPANIES:
 
-            initial_value = shared_stock_data[comp][-1]["price"]
-            # 회사 이름을 전달하여 각 회사마다 독립적인 base_mean 유지
+            initial_value = market_data.stock_data[comp][-1]["price"]
             new_price = brownian_motion(initial_value, company_name=comp)
-            shared_stock_data[comp].append({"time": time.time(), "price": round(new_price, 2)})
-        
-    
-        print("✅ 주가 생성 완료")
+            market_data.stock_data[comp].append({
+                "time": time.time(),
+                "price": round(new_price, 2)
+            })
             
+            if len(market_data.stock_data[comp]) > MAX_STORAGE_TIME:
+                market_data.stock_data[comp] = market_data.stock_data[comp][-MAX_STORAGE_TIME:]
+                
+        print("✅ 주가 생성 완료")
 
-
-def sample_data(data_list, interval):
-    if not data_list:
+def sample_data(price_history, interval, period):
+    if len(price_history) < 2:
         return []
 
     sampled_data = []
-    last_time = data_list[-1]["time"]
-    current_time = last_time - interval * 40  # 최근 40개의 샘플링된 데이터만 유지
-
+    last_time = price_history[-1]["time"]
+    
+    # 각 기간별 데이터 범위 설정
+    period_ranges = PERIOD_RANGE
+    
+    # 해당 기간의 데이터 범위 가져오기
+    target_range = period_ranges[period]
+    start_time = last_time - target_range
+    
+    # 범위 내의 데이터만 필터링
+    period_data = [p for p in price_history if p["time"] >= start_time]
+    if not period_data:
+        return []
+    
+    # 시간 간격으로 데이터 샘플링
+    current_time = start_time
     while current_time <= last_time:
-        segment = [point["price"] for point in data_list if current_time <= point["time"] < current_time + interval]
-        if segment:
-            sampled_data.append({"time": current_time, "price": round(np.mean(segment), 2)})
+        # 현재 시간 범위의 데이터 추출
+        interval_data = [p for p in period_data if current_time <= p["time"] < current_time + interval]
+        
+        if interval_data:
+            # 구간의 평균 가격 계산
+            avg_price = sum(p["price"] for p in interval_data) / len(interval_data)
+            sampled_data.append({
+                "time": current_time,
+                "price": round(avg_price, 2)
+            })
+        
         current_time += interval
 
-    from collections import deque
-    return deque(sampled_data, maxlen=50)
+    return sampled_data
 
 
-def calculate_percentage_rates(data_list):
-    """주어진 데이터 리스트에서 첫 가격과 마지막 가격 사이의 변동률(%)을 계산"""
-    if not data_list or len(data_list) < 2:
-        return 0.0
-
-    # 데이터가 딕셔너리 형태인지 확인
-    if isinstance(data_list[0], dict) and "price" in data_list[0]:
-        last_price = data_list[-1]["price"]
-        first_price = data_list[0]["price"]
-    else:
-        # 데이터가 숫자 목록인 경우
-        last_price = data_list[-1]
-        first_price = data_list[0]
-    
-    if first_price == 0 or first_price is None:  # 0으로 나누기 방지
-        return 0.0
-    
-    # 변동률 계산 (백분율로 변환)
-    #change_rate = ((last_price - first_price) / first_price) * 100
-    
-    # 너무 작은 변화는 반올림하여 0으로
-    #if abs(change_rate) < 0.01:
-    #    return 0.0
+def aggregate_prices_to_candles(price_points, group_size):
+    if len(price_points) < group_size:
+        return []
         
-    return round(first_price, 2)
+    # deque를 리스트로 변환하여 슬라이싱 가능하게 함
+    price_list = list(price_points)
+    candles = []
+    
+    for i in range(0, len(price_list), group_size):
+        if i + group_size > len(price_list):
+            break
+            
+        # 그룹 데이터 추출
+        chunk = price_list[i:i+group_size]
+        if len(chunk) < group_size:
+            break
+            
+        # 한 번의 순회로 모든 값을 계산
+        first_price = chunk[0]["price"]
+        last_price = chunk[-1]["price"]
+        high = low = first_price
+        
+        for point in chunk[1:]:  # 첫 번째는 이미 처리했으므로 제외
+            price = point["price"]
+            if price > high:
+                high = price
+            if price < low:
+                low = price
+                
+        candles.append({
+            "time": chunk[-1]["time"],
+            "open": first_price,
+            "high": high,
+            "low": low,
+            "close": last_price,
+        })
+    return candles
 
+def create_candle_from_data(data_list, lookback):
+    if len(data_list) < lookback:
+        return None
+        
+    target_data = data_list[-lookback:]
+    high = low = target_data[0]["high"]
+    
+    for candle in target_data[1:]:
+        if candle["high"] > high:
+            high = candle["high"]
+        if candle["low"] < low:
+            low = candle["low"]
+            
+    return {
+        "time": target_data[-1]["time"],
+        "open": target_data[0]["open"],
+        "high": high,
+        "low": low,
+        "close": target_data[-1]["close"]
+    }
 
-def generate_candle_data(shared_stock_data, shared_candle_data):
-    """캔들 데이터 생성"""
-    current_time = int(time.time())
-    for comp in shared_stock_data.keys():
-        if len(shared_stock_data[comp]) < 30:
+def generate_candle_data(stock_data, candle_data):
+    min_data_points = ONE_DAY_SECONDS // CANDLE_PER_DAY
+    
+    for comp in stock_data.keys():
+        stock_list = stock_data[comp]
+        if len(stock_list) < min_data_points:
+            print(f"⚠️ {comp}의 데이터 포인트가 부족합니다. (현재: {len(stock_list)}, 필요: {min_data_points})")
             continue
 
-        daily_prices = [point["price"] for point in list(shared_stock_data[comp])[-30:]]
+        # 일봉 생성 (하루 5개 캔들)
+        day_candles = aggregate_prices_to_candles(
+            stock_list,  
+            min_data_points
+        )
+        
+        if 'day' not in candle_data[comp]:
+            candle_data[comp]['day'] = deque(maxlen=5)
+        for candle in day_candles[-5:]:
+            candle_data[comp]['day'].append(candle)
 
-        if not daily_prices:
-            continue
+        # 상위 기간 캔들 생성을 위한 데이터
+        day_candles_list = list(candle_data[comp]['day'])
 
-        candle_entry = {
-            "time": current_time,
-            "open": daily_prices[0],
-            "high": max(daily_prices),
-            "low": min(daily_prices),
-            "price": daily_prices[-1]  # 종가
-        }
-        shared_candle_data[comp].append(candle_entry)
+        # 주봉 생성 (5개 데이터 = 1개 캔들, 7개 저장)
+        if len(day_candles_list) >= 5:
+            week_candle = create_candle_from_data(day_candles_list, 5)
+            if week_candle:
+                if 'week' not in candle_data[comp]:
+                    candle_data[comp]['week'] = deque(maxlen=7)
+                if len(candle_data[comp]['week']) == 0 or week_candle["time"] > candle_data[comp]['week'][-1]["time"]:
+                    candle_data[comp]['week'].append(week_candle)
 
-    print("📊 하루치 캔들 데이터 업데이트 완료")
+        # 월봉 생성 (5개 데이터 = 1개 캔들, 30개 저장)
+        if len(day_candles_list) >= 5:
+            month_candle = create_candle_from_data(day_candles_list, 5)
+            if month_candle:
+                if 'month' not in candle_data[comp]:
+                    candle_data[comp]['month'] = deque(maxlen=30)
+                if len(candle_data[comp]['month']) == 0 or month_candle["time"] > candle_data[comp]['month'][-1]["time"]:
+                    candle_data[comp]['month'].append(month_candle)
+
+        # 분기 캔들 생성 (15개 데이터 = 1개 캔들, 30개 저장)
+        if len(day_candles_list) >= 15:
+            quarter_candle = create_candle_from_data(day_candles_list, 15)
+            if quarter_candle:
+                if 'quarter' not in candle_data[comp]:
+                    candle_data[comp]['quarter'] = deque(maxlen=30)
+                if len(candle_data[comp]['quarter']) == 0 or quarter_candle["time"] > candle_data[comp]['quarter'][-1]["time"]:
+                    candle_data[comp]['quarter'].append(quarter_candle)
+
+    print("📊 캔들 데이터 업데이트 완료")
 
 
-def update_aggregated_data(shared_stock_data, shared_aggregated_data, shared_candle_data, shared_percentage_rates, sample_intervals):
-    companies = list(shared_stock_data.keys())
+
+def update_market_data(market_data):
     while True:
-        time.sleep(30)  # 더 자주 업데이트
-        for comp in companies:
-            data_list = list(shared_stock_data[comp])
-            if not data_list or len(data_list) < 2:  # 최소 2개 이상의 데이터 필요
-                continue
-
-            # 각 기간별 데이터 샘플링
-            quarter_data = sample_data(data_list, sample_intervals["quarter"])
-            month_data = sample_data(data_list, sample_intervals["month"])
-            week_data = sample_data(data_list, sample_intervals["week"])
-            day_data = sample_data(data_list, sample_intervals["day"])
-            
-            # 각 기간별 변동률 계산 및 공유 변수에 저장
-            if quarter_data and len(list(quarter_data)) >= 2:
-                shared_percentage_rates[comp]["quarter"] = calculate_percentage_rates(list(quarter_data))
-            if month_data and len(list(month_data)) >= 2:
-                shared_percentage_rates[comp]["month"] = calculate_percentage_rates(list(month_data))
-            if week_data and len(list(week_data)) >= 2:
-                shared_percentage_rates[comp]["week"] = calculate_percentage_rates(list(week_data))
-            if day_data and len(list(day_data)) >= 2:
-                shared_percentage_rates[comp]["day"] = calculate_percentage_rates(list(day_data))
-            
-            # 집계 데이터 저장
-            shared_aggregated_data[comp] = {
-                "quarter": quarter_data,
-                "month": month_data,
-                "week": week_data,
-                "day": day_data
-            }
-            
-        generate_candle_data(shared_stock_data, shared_candle_data)
+        time.sleep(ONE_DAY_SECONDS/CANDLE_PER_DAY)
         
-        # 변동률 출력
-        for comp in companies:
-            print(f"{comp} 변동률: {dict(shared_percentage_rates[comp])}")
+        for comp in COMPANIES:
+            if len(market_data.stock_data[comp]) < 2:
+                continue
+                
+            price_history = market_data.stock_data[comp]
             
-        print("📊 샘플링 데이터 업데이트 완료!")
+            for period, interval in UPDATE_PERIODS.items():
+                sampled_data = sample_data(price_history, interval, period)  # period 파라미터 추가
+                if sampled_data and len(sampled_data) >= 2:
+                    # 기존 데이터 클리어 후 새로운 데이터 추가
+                    market_data.aggregated_data[comp][period].clear()
+                    for data_point in sampled_data:
+                        market_data.aggregated_data[comp][period].append(data_point)
+
+            generate_candle_data(market_data.stock_data, market_data.candle_data)
+            
+        print("📊 일일 데이터 업데이트 완료")

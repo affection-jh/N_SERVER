@@ -1,10 +1,9 @@
 from collections import deque
 import numpy as np
-from zoneinfo import ZoneInfo
-import datetime
+
 
 # 전역 변수
-SIGMA = 0.015     # 변동성 (낮출수록 부드러움, 현실적)
+SIGMA = 0.02    # 변동성 (낮출수록 부드러움, 현실적)
 MU = 0.00015      # 기대 수익률 (아주 약한 우상향)
 DT = 1/3600       # 시간 간격 (1초 = 1/3600시간)
 company_base_means = {}
@@ -34,10 +33,10 @@ def brownian_motion(S0, company_name=None):
         event_type = np.random.choice(["good", "bad"])
         if event_type == "good":
             S *= np.random.uniform(1.01, 1.03)  # 완만한 급등
-            print(f"{company_name} 🚀 완만한 급등 이벤트 발생!")
+            print(f"{company_name}  완만한 급등 이벤트 발생!")
         else:
             S *= np.random.uniform(0.97, 0.99)  # 완만한 급락
-            print(f"{company_name} 💥 완만한 급락 이벤트 발생!")
+            print(f"{company_name}  완만한 급락 이벤트 발생!")
 
     # 가격 제한 (20~500)
     S = max(S, 20)
@@ -51,7 +50,7 @@ def brownian_motion(S0, company_name=None):
         if hour_count % 8 == 0:
             long_term_shift = np.random.uniform(-0.00005, 0.00005)
             MU += long_term_shift
-            print(f"🌍 장기 추세 변화: MU={MU:.6f}")
+            print(f" 장기 추세 변화: MU={MU:.6f}")
 
             shift_ratio = np.random.uniform(-0.001, 0.001)
             if company_name:
