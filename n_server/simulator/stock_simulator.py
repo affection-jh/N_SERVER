@@ -1,7 +1,7 @@
 from collections import deque
 import numpy as np
 
-
+#
 # 전역 변수
 SIGMA = 0.02    # 변동성 (낮출수록 부드러움, 현실적)
 MU = 0.00015      # 기대 수익률 (아주 약한 우상향)

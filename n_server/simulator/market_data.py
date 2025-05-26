@@ -1,7 +1,7 @@
 from collections import deque
 from .config import COMPANIES, INITIAL_PRICES, MAX_STORAGE_TIME, ONE_DAY_SECONDS, CANDLE_PER_DAY
 import time
-
+#
 class MarketData:
     def __init__(self):
         # 주가 데이터 초기화

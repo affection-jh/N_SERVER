@@ -2,6 +2,7 @@ from simulator.market_data import MarketData
 from simulator.data_genetator import generate_data, update_market_data
 import threading
 
+#
 def start_market():
     # 마켓 데이터 인스턴스 생성
     market_data = MarketData()
