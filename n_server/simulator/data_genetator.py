@@ -95,6 +95,7 @@ def aggregate_prices_to_candles(price_points, group_size):
         })
     return candles
 
+#fuck 고쳤다니께 
 def create_candle_from_data(data_list, lookback):
     if len(data_list) < lookback:
         return None
