@@ -1,4 +1,5 @@
 # ws_server.py
+from flask import logging
 from flask_socketio import SocketIO, emit
 import time
 import threading
@@ -17,22 +18,19 @@ class WebSocketManager:
 
     def _start_emit_thread(self):
         if self._emit_thread is None or not self._emit_thread.is_alive():
-            print("데이터 송출 스레드 시작")
             self._emit_thread = threading.Thread(target=self.emit_stock_prices, daemon=True)
             self._emit_thread.start()
 
     def handle_connect(self):
         try:
-            print("새로운 클라이언트가 연결되었습니다.")
             self.socketio.emit("message", {
                 "type": "welcome",
                 "msg": "주가 실시간 스트리밍 시작"
             })
         except Exception as e:
-            print(f"웹소켓 연결 오류: {e}")
+            logging.error(f"웹소켓 연결 오류: {e}")
 
     def emit_stock_prices(self):
-        print("실시간 데이터 송출 시작")
         while True:
             try:
                 if not self.stock_data or not self.companies:
@@ -50,7 +48,7 @@ class WebSocketManager:
                     self.socketio.emit("price_update", price_data)
 
             except Exception as e:
-                print(f"실시간 데이터 송출 중 오류 발생: {e}")
+                logging.error(f"실시간 데이터 송출 중 오류 발생: {e}")
             
             time.sleep(UPDATE_INTERVAL)
 
@@ -60,8 +58,8 @@ class WebSocketManager:
             app,
             cors_allowed_origins="*",
             async_mode='threading',
-            logger=True,
-            engineio_logger=True,
+            logger=False,
+            engineio_logger=False,
             ping_timeout=60,
             ping_interval=25,
             host='0.0.0.0',  # 모든 네트워크 인터페이스에서 접속 허용
@@ -70,8 +68,6 @@ class WebSocketManager:
         )
         
         # 이벤트 핸들러 등록
-        self.socketio.on_event('connect', self.handle_connect)
-        
         # 데이터 송출 스레드 시작
         self._start_emit_thread()
             

@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, logging, render_template
 from flask_socketio import SocketIO
 from simulator.start_manager import start_market
 from routes.stock_routes import stock_bp, init_routes
@@ -32,7 +32,5 @@ socketio = ws_manager.start(app)
 
 if __name__ == "__main__":
     # 서버 시작
-    print("🚀 스톡 시뮬레이터 서버 시작")
-    print("📡 웹소켓 서버: ws://0.0.0.0:5000/socket.io/")
-    print("🌐 REST API: http://0.0.0.0:5000/stock")
+    logging.info("서버 시작")
     socketio.run(app, host="0.0.0.0", port=5000, debug=False, allow_unsafe_werkzeug=True)

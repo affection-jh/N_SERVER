@@ -18,7 +18,6 @@ def generate_data(market_data):
             if len(market_data.stock_data[comp]) > MAX_STORAGE_TIME:
                 market_data.stock_data[comp] = market_data.stock_data[comp][-MAX_STORAGE_TIME:]
                 
-        print("✅ 주가 생성 완료")
 
 def sample_data(price_history, interval, period):
     if len(price_history) < 2:
@@ -122,8 +121,9 @@ def generate_candle_data(stock_data, candle_data):
     
     for comp in stock_data.keys():
         stock_list = stock_data[comp]
+    
+        
         if len(stock_list) < min_data_points:
-            print(f"⚠️ {comp}의 데이터 포인트가 부족합니다. (현재: {len(stock_list)}, 필요: {min_data_points})")
             continue
 
         # 일봉 생성 (하루 5개 캔들)
@@ -133,8 +133,8 @@ def generate_candle_data(stock_data, candle_data):
         )
         
         if 'day' not in candle_data[comp]:
-            candle_data[comp]['day'] = deque(maxlen=5)
-        for candle in day_candles[-5:]:
+            candle_data[comp]['day'] = deque(maxlen=15)  # 15개로 수정
+        for candle in day_candles[-15:]:  # 15개까지 저장
             candle_data[comp]['day'].append(candle)
 
         # 상위 기간 캔들 생성을 위한 데이터
@@ -167,7 +167,6 @@ def generate_candle_data(stock_data, candle_data):
                 if len(candle_data[comp]['quarter']) == 0 or quarter_candle["time"] > candle_data[comp]['quarter'][-1]["time"]:
                     candle_data[comp]['quarter'].append(quarter_candle)
 
-    print("📊 캔들 데이터 업데이트 완료")
 
 
 
@@ -191,4 +190,3 @@ def update_market_data(market_data):
 
             generate_candle_data(market_data.stock_data, market_data.candle_data)
             
-        print("📊 일일 데이터 업데이트 완료")

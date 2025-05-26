@@ -39,7 +39,6 @@ def get_stock_history(company, period):
         return jsonify(history_data)
 
     except Exception as e:
-        print(f"🚨 주가 이력 조회 중 오류 발생: {e}")
         return jsonify({"error": "서버 내부 오류 발생"}), 500
     
 
@@ -54,7 +53,6 @@ def get_current_prices():
         }
         return jsonify(prices)
     except Exception as e:
-        print(f"🚨 오류 발생: {e}")
         return jsonify({"error": "서버 내부 오류 발생"}), 500
     
 
@@ -68,7 +66,6 @@ def get_candle_data(company, period):
             "candles": candles
         })
     except Exception as e:
-        print(f"캔들 데이터 조회 중 오류 발생: {e}")
         return jsonify({"error": "서버 내부 오류 발생"}), 500
 
 
